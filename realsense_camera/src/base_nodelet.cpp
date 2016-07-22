@@ -127,6 +127,12 @@ namespace realsense_camera
       rs_enable_stream(rs_device_, stream_index, width, height, format, fps, &rs_error_);
       checkError();
     }
+    else if (stream_mode.compare ("close") == 0)
+    {
+      ROS_INFO_STREAM(nodelet_name_ << " - Enabling " << STREAM_DESC[stream_index] << " stream: close mode");
+      rs_enable_stream_preset(rs_device_, stream_index, RS_PRESET_HIGHEST_FRAMERATE, &rs_error_);
+      checkError ();
+    }
     else
     {
       ROS_INFO_STREAM(nodelet_name_ << " - Enabling " << STREAM_DESC[stream_index] << " stream: preset mode");
@@ -230,8 +236,8 @@ namespace realsense_camera
 
     // print device info
     ROS_INFO_STREAM(nodelet_name_ << " - Connecting to camera with Serial No: " <<
-        rs_get_device_serial(rs_device_, &rs_error_) <<
-        " USB Port ID: " << rs_get_device_usb_port_id(rs_device_, &rs_error_));
+        rs_get_device_serial(rs_device_, &rs_error_) ); /* <<
+        " USB Port ID: " << rs_get_device_usb_port_id(rs_device_, &rs_error_));*/
     checkError();
 
     // Enable streams.
@@ -272,8 +278,8 @@ namespace realsense_camera
       detected_camera_msg = detected_camera_msg +
             "\n\t\t\t\t- Serial No: " + rs_get_device_serial(rs_detected_device, &rs_error_) +
             "; Firmware: " + rs_get_device_firmware_version(rs_detected_device, &rs_error_) +
-            "; Name: " + rs_get_device_name(rs_detected_device, &rs_error_) +
-            "; USB Port ID: " + rs_get_device_usb_port_id(rs_detected_device, &rs_error_);
+            "; Name: " + rs_get_device_name(rs_detected_device, &rs_error_); /*+
+            "; USB Port ID: " + rs_get_device_usb_port_id(rs_detected_device, &rs_error_);*/
       checkError();
     }
     ROS_INFO_STREAM(nodelet_name_ + detected_camera_msg);
@@ -430,13 +436,19 @@ namespace realsense_camera
    */
   void BaseNodelet::prepareStreamData(rs_stream rs_strm)
   {
-    if (rs_strm == RS_STREAM_DEPTH)
-    {
-      // fill depth buffer
-      image_depth16_ = reinterpret_cast <const uint16_t * >(rs_get_frame_data(rs_device_, RS_STREAM_DEPTH, 0));
-    }
     // fill image buffer for stream
     image_[(uint32_t) rs_strm].data = (unsigned char *) (rs_get_frame_data(rs_device_, rs_strm, 0));
+
+    if (rs_strm == RS_STREAM_DEPTH)
+    {
+      float depth_scale_ = rs_get_device_depth_scale(rs_device_, &rs_error_);
+      depth_scale_ *= 1000.0;
+      // fill depth buffer
+      image_depth16_ = reinterpret_cast <const uint16_t * >(rs_get_frame_data(rs_device_, RS_STREAM_DEPTH, 0));
+      cv::Mat image_scaled;
+      image_scaled = cv::Mat(image_[(uint32_t) RS_STREAM_DEPTH].size(), CV_16UC1, (void *) image_depth16_, width_[RS_STREAM_DEPTH] * sizeof(uint16_t));
+      image_scaled.convertTo(image_[(uint32_t) RS_STREAM_DEPTH], CV_16UC1, depth_scale_);
+    }
   }
 
   /*
@@ -612,7 +624,7 @@ namespace realsense_camera
 
       float depth_point[3], color_point[3], color_pixel[2], scaled_depth;
       unsigned char *color_data = image_color.data;
-      const float depth_scale = rs_get_device_depth_scale(rs_device_, &rs_error_);
+      const float depth_scale = 0.001; //rs_get_device_depth_scale(rs_device_, &rs_error_);
       checkError();// Default value is 0.001
 
       // Fill the PointCloud2 fields.

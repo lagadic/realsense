@@ -65,6 +65,8 @@ namespace realsense_camera
     void allocateResources();
     void setStaticCameraOptions();
     void configCallback(realsense_camera::r200_paramsConfig &config, uint32_t level);
+
+    std::string camera_type;
   };
 }
 

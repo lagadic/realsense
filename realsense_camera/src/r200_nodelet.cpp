@@ -50,6 +50,9 @@ namespace realsense_camera
     num_streams_ = R200_STREAM_COUNT;
     max_z_ = R200_MAX_Z;
 
+    pnh_.getParam("camera_type", camera_type);
+    ROS_INFO_STREAM("camera_type: " << camera_type);
+
     // create dynamic reconfigure server - this must be done before calling base class onInit()
     // onInit() calls setStaticCameraOptions() which relies on this being set already
     dynamic_reconf_server_.reset(new dynamic_reconfigure::Server<realsense_camera::r200_paramsConfig>(pnh_));
@@ -59,7 +62,8 @@ namespace realsense_camera
 
     // Set up the IR2 frame and topics
     image_transport::ImageTransport it (nh_);
-    camera_publisher_[RS_STREAM_INFRARED2] = it.advertiseCamera(IR2_TOPIC, 1);
+    if (camera_type.find("R200") != std::string::npos)
+      camera_publisher_[RS_STREAM_INFRARED2] = it.advertiseCamera(IR2_TOPIC, 1);
 
     // setCallback can only be called after rs_device_ is set by base class connectToCamera()
     dynamic_reconf_server_->setCallback(boost::bind(&R200Nodelet::configCallback, this, _1, _2));
@@ -71,7 +75,7 @@ namespace realsense_camera
   void R200Nodelet::enableStream(rs_stream stream_index, int width, int height, rs_format format, int fps)
   {
     BaseNodelet::enableStream(stream_index, width, height, format, fps);
-    if (stream_index == RS_STREAM_INFRARED)
+    if ((stream_index == RS_STREAM_INFRARED) && (camera_type.find ("R200") != std::string::npos))
     {
       enableStream(RS_STREAM_INFRARED2, width_[RS_STREAM_DEPTH], height_[RS_STREAM_DEPTH], IR_FORMAT, fps_[RS_STREAM_DEPTH]);
     }
@@ -80,7 +84,7 @@ namespace realsense_camera
   void R200Nodelet::disableStream(rs_stream stream_index)
   {
     BaseNodelet::disableStream(stream_index);
-    if (stream_index == RS_STREAM_INFRARED)
+    if ((stream_index == RS_STREAM_INFRARED) && (camera_type.find ("R200") != std::string::npos))
     {
       disableStream(RS_STREAM_INFRARED2);
     }
@@ -95,6 +99,8 @@ namespace realsense_camera
     rs_set_device_option(rs_device_, RS_OPTION_COLOR_GAIN, config.color_gain, 0);
     rs_set_device_option(rs_device_, RS_OPTION_COLOR_GAMMA, config.color_gamma, 0);
     rs_set_device_option(rs_device_, RS_OPTION_COLOR_HUE, config.color_hue, 0);
+    if (camera_type.find ("R200") == std::string::npos)
+      config.color_saturation = 43;
     rs_set_device_option(rs_device_, RS_OPTION_COLOR_SATURATION, config.color_saturation, 0);
     rs_set_device_option(rs_device_, RS_OPTION_COLOR_SHARPNESS, config.color_sharpness, 0);
     rs_set_device_option(rs_device_, RS_OPTION_COLOR_ENABLE_AUTO_WHITE_BALANCE, config.color_enable_auto_white_balance, 0);
@@ -169,7 +175,8 @@ namespace realsense_camera
     // call base class method first
     BaseNodelet::allocateResources();
     // set IR2 image buffer
-    image_[(uint32_t) RS_STREAM_INFRARED2] = cv::Mat(height_[RS_STREAM_DEPTH], width_[RS_STREAM_DEPTH], CV_8UC1, cv::Scalar (0));
+    if (camera_type.find("R200") != std::string::npos)
+      image_[(uint32_t) RS_STREAM_INFRARED2] = cv::Mat(height_[RS_STREAM_DEPTH], width_[RS_STREAM_DEPTH], CV_8UC1, cv::Scalar (0));
   }
 
   /*
@@ -180,7 +187,8 @@ namespace realsense_camera
     // call base class method first
     BaseNodelet::setStreamOptions();
     // setup R200 specific frame
-    pnh_.param("ir2_frame_id", frame_id_[RS_STREAM_INFRARED2], DEFAULT_IR2_FRAME_ID);
+    if (camera_type.find("R200") != std::string::npos)
+      pnh_.param("ir2_frame_id", frame_id_[RS_STREAM_INFRARED2], DEFAULT_IR2_FRAME_ID);
   }
 
   /*
@@ -191,8 +199,11 @@ namespace realsense_camera
     // Call base class method first
     BaseNodelet::fillStreamEncoding();
     // Setup IR2 stream
-    stream_encoding_[(uint32_t) RS_STREAM_INFRARED2] = sensor_msgs::image_encodings::TYPE_8UC1;
-    stream_step_[(uint32_t) RS_STREAM_INFRARED2] = width_[RS_STREAM_DEPTH] * sizeof (unsigned char);
+    if (camera_type.find("R200") != std::string::npos)
+    {
+      stream_encoding_[(uint32_t) RS_STREAM_INFRARED2] = sensor_msgs::image_encodings::TYPE_8UC1;
+      stream_step_[(uint32_t) RS_STREAM_INFRARED2] = width_[RS_STREAM_DEPTH] * sizeof (unsigned char);
+    }
   }
 
   /*
